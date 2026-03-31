@@ -27,7 +27,7 @@
 - OPS.1.1.4 Logging — full audit trail per request
 - CON.8 Data Security — PII redacted before storage
 
-## DSGVO Measures
+## GDPR Measures
 - Input text is hashed (SHA-256) before audit storage
 - PII detected in inputs is redacted before logging
 - No raw user input is persisted

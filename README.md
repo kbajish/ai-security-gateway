@@ -32,7 +32,7 @@ Aligned with OWASP LLM Top 10, EU AI Act, NIST AI RMF, MITRE ATLAS, and BSI IT-G
 - 🕵️ PII detection — spaCy NER combined with regex for IBAN, credit cards, and German tax IDs
 - 🔓 Jailbreak detection — 50+ known patterns combined with Ollama semantic intent classification
 - 🛡️ Output guardrails — PII leak detection and toxicity filtering on LLM responses
-- 📋 DSGVO-compliant audit trail — inputs hashed with SHA-256, PII redacted before storage
+- 📋 GDPR-aligned audit trail — inputs hashed with SHA-256, PII redacted before storage
 - ⚖️ Weighted risk scorer — configurable Allow / Sanitize / Block thresholds
 - 📊 Streamlit SOC dashboard — blocked requests, risk scores, and audit log viewer
 - ⚡ FastAPI gateway endpoints
@@ -58,7 +58,7 @@ Protected AI system (RAG / Agent / any LLM API)
         ↓
 src/guardrails/output_guard.py    — output PII + toxicity filtering
         ↓
-src/audit/logger.py               — DSGVO-compliant audit logging (SQLite)
+src/audit/logger.py               — GDPR-aligned audit logging (SQLite)
         ↓
 api/main.py                       — FastAPI gateway
         ↓
@@ -71,7 +71,7 @@ dashboard/app.py                  — Streamlit SOC dashboard
 
 Every incoming request passes through three detection layers in sequence. The rule-based layer applies regex patterns for known injection strings, jailbreak prefixes, and PII formats — this handles obvious threats without any model inference. The ML layer uses a TF-IDF + LogisticRegression classifier trained on injection examples and spaCy NER for entity detection. The LLM layer uses Ollama to semantically classify adversarial intent for cases that require contextual reasoning.
 
-The weighted risk scorer aggregates all detection scores into a single risk value using configurable weights. The policy engine maps this value to Allow, Sanitize, or Block based on configurable thresholds. Allowed requests are forwarded to the protected AI system. The response is then checked by output guardrails for PII leakage and toxic content before being returned to the user. Every request and decision is written to a DSGVO-compliant audit log with raw inputs never persisted.
+The weighted risk scorer aggregates all detection scores into a single risk value using configurable weights. The policy engine maps this value to Allow, Sanitize, or Block based on configurable thresholds. Allowed requests are forwarded to the protected AI system. The response is then checked by output guardrails for PII leakage and toxic content before being returned to the user. Every request and decision is written to a GDPR-aligned audit log with raw inputs never persisted.
 
 ---
 
@@ -112,7 +112,7 @@ The Streamlit SOC dashboard provides:
 - 🚨 Real-time security check with decision, risk score, and detection breakdown
 - 📊 Risk score gauge — colour-coded by threshold zone
 - 🔍 PII entity panel showing detected entities and types
-- 📋 DSGVO audit log with SHA-256 hashed inputs and colour-coded decisions
+- 📋 GDPR audit log with SHA-256 hashed inputs and colour-coded decisions
 - 📈 Running stats — total requests, blocked, sanitized, allowed, average risk score
 
 ---
@@ -126,7 +126,7 @@ The Streamlit SOC dashboard provides:
 | NLP / PII | spaCy |
 | LLM detection | LangChain + Ollama (llama3.2, local, no API key) |
 | Risk scoring | Custom weighted scorer |
-| Audit | SQLite, DSGVO-aligned |
+| Audit | SQLite, GDPR-aligned |
 | Backend | FastAPI, Uvicorn |
 | Dashboard | Streamlit, Plotly |
 | Experiment tracking | MLflow |
@@ -154,7 +154,7 @@ ai-security-gateway/
 │   ├── guardrails/
 │   │   └── output_guard.py        # Output PII + toxicity filter
 │   └── audit/
-│       └── logger.py              # DSGVO audit trail
+│       └── logger.py              # GDPR audit trail
 │
 ├── api/
 │   └── main.py                    # FastAPI gateway
@@ -234,7 +234,7 @@ docker compose up --build
 | `POST` | `/gateway/check` | Full security check — returns risk score, decision, and detection breakdown |
 | `POST` | `/gateway/scan` | Fast scan without LLM layer — rule + ML only |
 | `POST` | `/gateway/output` | Check LLM output before returning to user |
-| `GET` | `/audit` | Retrieve DSGVO-compliant audit log |
+| `GET` | `/audit` | Retrieve GDPR-aligned audit log |
 | `GET` | `/audit/stats` | Aggregated stats — totals, averages, decision breakdown |
 | `GET` | `/health` | Health check |
 
@@ -263,4 +263,4 @@ Tests cover rule detection, ML classifier, output guardrails, risk scorer, and p
 
 ## 👤 Author
 
-Experienced IT professional with a background in development, cybersecurity, and ERP systems, with expertise in Industrial AI. Focused on building production-ready AI systems with explainability, LLM integration, and MLOps best practices.
+Experienced IT professional with a background in development, cybersecurity, and ERP systems, with expertise in Industrial AI. Focused on building well-engineered AI systems with explainability, LLM integration, security, and MLOps practices.

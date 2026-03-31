@@ -11,7 +11,7 @@ st.set_page_config(
     layout     = "wide"
 )
 
-st.title("🛡️ AI Security Gateway — SOC Dashboard")
+st.title("🛡️ AI Security Gateway — Dashboard")
 st.caption("3-layer hybrid detection: rules + ML + LLM semantic reasoning")
 
 # ── Sidebar ───────────────────────────────────────────────────────
