@@ -71,8 +71,14 @@ def assess_risk(text: str, use_llm: bool = True) -> RiskAssessment:
         WEIGHTS["injection"] * injection_score +
         WEIGHTS["jailbreak"] * jailbreak_score +
         WEIGHTS["pii"]       * pii_score +
-        WEIGHTS["toxicity"]  * 0.0  # toxicity handled in output guard
+        WEIGHTS["toxicity"]  * 0.0
     )
+
+    # Boost: if any single score is high, ensure risk reflects it
+    max_single = max(injection_score, jailbreak_score, pii_score, llm_score)
+    if max_single >= 0.7:
+        risk_score = max(risk_score, max_single * 0.6)
+
     risk_score = round(min(1.0, risk_score), 4)
 
     return RiskAssessment(
