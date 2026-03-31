@@ -11,6 +11,8 @@ A middleware security gateway for LLM applications that intercepts requests and 
 
 Aligned with OWASP LLM Top 10, EU AI Act, NIST AI RMF, MITRE ATLAS, and BSI IT-Grundschutz.
 
+This project demonstrates the architecture and security patterns of an LLM security gateway. It is intended as a reference implementation and learning resource, not a deployment-ready system.
+
 ---
 
 ## 🎯 What It Protects Against
