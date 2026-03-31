@@ -5,9 +5,11 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Docker](https://img.shields.io/badge/docker-compose-blue)
 ![OWASP](https://img.shields.io/badge/OWASP-LLM_Top_10-red)
-![EU AI Act](https://img.shields.io/badge/EU_AI_Act-compliant-orange)
+![EU AI Act](https://img.shields.io/badge/EU_AI_Act-aligned-orange)
 
-A production-ready middleware security gateway for LLM applications that intercepts every request and response, applying a three-layer hybrid detection pipeline — rule-based, ML-based, and LLM-based — before allowing traffic to reach the protected AI system. Aligned with OWASP LLM Top 10, EU AI Act, NIST AI RMF, MITRE ATLAS, and BSI IT-Grundschutz.
+A middleware security gateway for LLM applications that intercepts requests and responses, applying a three-layer hybrid detection pipeline — rule-based, ML-based, and LLM-based — before forwarding traffic to the protected AI system. Designed around the security patterns and compliance frameworks relevant to enterprise AI deployments in regulated industries.
+
+Aligned with OWASP LLM Top 10, EU AI Act, NIST AI RMF, MITRE ATLAS, and BSI IT-Grundschutz.
 
 ---
 
@@ -25,17 +27,17 @@ A production-ready middleware security gateway for LLM applications that interce
 
 ## 🚀 Key Features
 
-- 🔍 3-layer hybrid detection — rule-based + ML + LLM semantic reasoning
-- 💉 Prompt injection detection trained on Deepset prompt-injections dataset
-- 🕵️ PII detection — spaCy NER + regex for IBAN, credit cards, German tax IDs
-- 🔓 Jailbreak detection — 50+ known patterns + Ollama intent classification
-- 🛡️ Output guardrails — PII leak + toxicity filtering on LLM responses
-- 📋 DSGVO-compliant audit trail — PII redacted, SQLite persistence
-- ⚖️ Weighted risk scorer — Allow / Block / Sanitize decisions
-- 📊 Streamlit SOC dashboard — blocked requests, risk scores, compliance log
+- 🔍 3-layer hybrid detection — rule-based patterns + ML classifier + LLM semantic reasoning
+- 💉 Prompt injection detection using regex rules and a TF-IDF + LogisticRegression classifier
+- 🕵️ PII detection — spaCy NER combined with regex for IBAN, credit cards, and German tax IDs
+- 🔓 Jailbreak detection — 50+ known patterns combined with Ollama semantic intent classification
+- 🛡️ Output guardrails — PII leak detection and toxicity filtering on LLM responses
+- 📋 DSGVO-compliant audit trail — inputs hashed with SHA-256, PII redacted before storage
+- ⚖️ Weighted risk scorer — configurable Allow / Sanitize / Block thresholds
+- 📊 Streamlit SOC dashboard — blocked requests, risk scores, and audit log viewer
 - ⚡ FastAPI gateway endpoints
 - 🐳 Docker Compose deployment
-- 🔄 GitHub Actions CI/CD
+- 🔄 GitHub Actions CI/CD — 24 tests passing
 
 ---
 
@@ -50,13 +52,13 @@ src/detection/llm_detector.py     — Ollama semantic intent classification
 src/detection/pii_detector.py     — NER + regex PII detection
         ↓
 src/scoring/risk_scorer.py        — weighted risk aggregation
-src/policy/engine.py              — Allow / Block / Sanitize decision
+src/policy/engine.py              — Allow / Sanitize / Block decision
         ↓
 Protected AI system (RAG / Agent / any LLM API)
         ↓
 src/guardrails/output_guard.py    — output PII + toxicity filtering
         ↓
-src/audit/logger.py               — DSGVO-compliant audit logging
+src/audit/logger.py               — DSGVO-compliant audit logging (SQLite)
         ↓
 api/main.py                       — FastAPI gateway
         ↓
@@ -67,9 +69,9 @@ dashboard/app.py                  — Streamlit SOC dashboard
 
 ## ⚙️ How It Works
 
-Every incoming request passes through three detection layers in sequence. The rule-based layer applies regex patterns for known injection strings, jailbreak prefixes, and PII formats — this is instant and filters obvious threats. The ML layer uses a TF-IDF + LogisticRegression classifier trained on the Deepset prompt-injections dataset and spaCy NER for entity detection. The LLM layer uses Ollama to semantically classify adversarial intent for borderline cases.
+Every incoming request passes through three detection layers in sequence. The rule-based layer applies regex patterns for known injection strings, jailbreak prefixes, and PII formats — this handles obvious threats without any model inference. The ML layer uses a TF-IDF + LogisticRegression classifier trained on injection examples and spaCy NER for entity detection. The LLM layer uses Ollama to semantically classify adversarial intent for cases that require contextual reasoning.
 
-The weighted risk scorer aggregates all detection scores into a single risk value. The policy engine maps this to Allow, Sanitize, or Block. Allowed requests are forwarded to the protected AI system. The response is then checked by output guardrails for PII leakage and toxic content before being returned to the user. Every request is logged to a DSGVO-compliant audit trail with PII redacted before storage.
+The weighted risk scorer aggregates all detection scores into a single risk value using configurable weights. The policy engine maps this value to Allow, Sanitize, or Block based on configurable thresholds. Allowed requests are forwarded to the protected AI system. The response is then checked by output guardrails for PII leakage and toxic content before being returned to the user. Every request and decision is written to a DSGVO-compliant audit log with raw inputs never persisted.
 
 ---
 
@@ -83,20 +85,20 @@ risk_score = (
     0.15 * toxicity_score
 )
 
-# Policy decision
+# Policy thresholds (configurable via .env)
 if risk_score >= 0.7:  →  BLOCK
-if risk_score >= 0.4:  →  SANITIZE
-if risk_score <  0.4:  →  ALLOW
+if risk_score >= 0.3:  →  SANITIZE
+if risk_score <  0.3:  →  ALLOW
 ```
 
 ---
 
 ## 🏛️ Framework Alignment
 
-| Framework | Coverage |
+| Framework | Implementation |
 |---|---|
 | OWASP LLM Top 10 | LLM01 injection, LLM02 data leakage, LLM06 sensitive info, LLM09 overreliance |
-| EU AI Act | Art. 13 transparency, Art. 9 risk management, Art. 17 quality system |
+| EU AI Act | Art. 13 transparency logging, Art. 9 risk management, Art. 17 quality system |
 | NIST AI RMF | GOVERN, MAP, MEASURE, MANAGE functions |
 | MITRE ATLAS | AML.T0051 prompt injection, AML.T0048 societal harm |
 | BSI IT-Grundschutz | OPS.1.1.4 logging, CON.8 data security |
@@ -107,11 +109,11 @@ if risk_score <  0.4:  →  ALLOW
 
 The Streamlit SOC dashboard provides:
 
-- 🚨 Blocked request feed with threat type and risk score
-- 📊 Risk score distribution chart
-- 🔍 Attack type breakdown — injection vs jailbreak vs PII
-- 📋 DSGVO audit log viewer (PII redacted)
-- ✅ Allow / Sanitize / Block decision metrics
+- 🚨 Real-time security check with decision, risk score, and detection breakdown
+- 📊 Risk score gauge — colour-coded by threshold zone
+- 🔍 PII entity panel showing detected entities and types
+- 📋 DSGVO audit log with SHA-256 hashed inputs and colour-coded decisions
+- 📈 Running stats — total requests, blocked, sanitized, allowed, average risk score
 
 ---
 
@@ -121,16 +123,16 @@ The Streamlit SOC dashboard provides:
 |---|---|
 | Rule detection | Python regex, custom pattern library |
 | ML detection | scikit-learn (TF-IDF + LogisticRegression) |
-| NLP / PII | spaCy (en_core_web_sm) |
-| LLM detection | LangChain + Ollama (llama3.2, local) |
+| NLP / PII | spaCy |
+| LLM detection | LangChain + Ollama (llama3.2, local, no API key) |
 | Risk scoring | Custom weighted scorer |
-| Audit | SQLite, DSGVO-compliant |
+| Audit | SQLite, DSGVO-aligned |
 | Backend | FastAPI, Uvicorn |
-| Dashboard | Streamlit |
+| Dashboard | Streamlit, Plotly |
 | Experiment tracking | MLflow |
 | Containerisation | Docker Compose |
 | CI/CD | GitHub Actions |
-| Testing | pytest |
+| Testing | pytest (24 tests) |
 
 ---
 
@@ -148,7 +150,7 @@ ai-security-gateway/
 │   ├── scoring/
 │   │   └── risk_scorer.py         # Weighted risk aggregation
 │   ├── policy/
-│   │   └── engine.py              # Allow / Block / Sanitize
+│   │   └── engine.py              # Allow / Sanitize / Block
 │   ├── guardrails/
 │   │   └── output_guard.py        # Output PII + toxicity filter
 │   └── audit/
@@ -161,14 +163,15 @@ ai-security-gateway/
 │   └── app.py                     # Streamlit SOC dashboard
 │
 ├── tests/
-│   ├── test_detectors.py          # Detection module tests
-│   └── test_imports.py            # CI-safe import tests
+│   ├── test_detectors.py          # Detection module tests (16 tests)
+│   └── test_imports.py            # Import tests (8 tests)
 │
 ├── .github/
 │   └── workflows/
 │       └── ci.yml                 # GitHub Actions pipeline
 │
 ├── mlruns/                        # MLflow tracking (not committed)
+├── data/audit/                    # SQLite audit database (not committed)
 ├── docker-compose.yml
 ├── Dockerfile.api
 ├── Dockerfile.dashboard
@@ -203,12 +206,17 @@ pip install -r requirements.dev.txt
 python -m spacy download en_core_web_sm
 ```
 
-### 4. Start all services
+### 4. Copy environment config
+```bash
+cp .env.example .env
+```
+
+### 5. Start all services
 ```bash
 docker compose up --build
 ```
 
-### 5. Access services
+### 6. Access services
 
 | Service   | URL                        |
 |-----------|----------------------------|
@@ -223,20 +231,33 @@ docker compose up --build
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/gateway/check` | Full security check — returns risk score + decision |
-| `POST` | `/gateway/scan` | Input-only scan without forwarding to AI system |
+| `POST` | `/gateway/check` | Full security check — returns risk score, decision, and detection breakdown |
+| `POST` | `/gateway/scan` | Fast scan without LLM layer — rule + ML only |
+| `POST` | `/gateway/output` | Check LLM output before returning to user |
 | `GET` | `/audit` | Retrieve DSGVO-compliant audit log |
+| `GET` | `/audit/stats` | Aggregated stats — totals, averages, decision breakdown |
 | `GET` | `/health` | Health check |
 
 ---
 
-## 📈 Future Improvements
+## 🧪 Tests
+
+```bash
+pytest tests/ -v
+# 24 passed
+```
+
+Tests cover rule detection, ML classifier, output guardrails, risk scorer, and policy engine — all without requiring a live Ollama instance.
+
+---
+
+## 📈 Possible Extensions
 
 - Adversarial robustness testing using IBM ART (Adversarial Robustness Toolbox)
 - Real-time threat intelligence feed integration
 - Role-based access control (RBAC) on gateway endpoints
-- Kafka streaming for high-throughput deployment
-- Cloud deployment with managed audit storage
+- Kafka streaming for high-throughput request processing
+- Cloud deployment with managed audit storage and retention policies
 
 ---
 
