@@ -31,6 +31,19 @@ INJECTION_PATTERNS = [
     r"print\s+(your\s+)?(system\s+prompt|instructions?|context)",
     r"reveal\s+(your\s+)?(system\s+prompt|instructions?|context)",
     r"what\s+(are\s+your|is\s+your)\s+(system\s+prompt|instructions?)",
+    r"system\s+override",
+    r"new\s+task\s+is\s+to\s+forget",
+    r"\[inst\]",
+    r"your\s+instructions\s+have\s+been\s+updated",
+    r"####",
+    r"end\s+of\s+prompt",
+    r"act\s+as\s+dan",
+    r"you\s+are\s+now\s+(dan|evil|unrestricted)",
+    r"confirm\s+this\s+new\s+(role|identity|directive)",
+    r"pretend\s+you\s+have\s+no\s+(content\s+)?(filter|restriction|rule|guideline)",
+    r"you\s+are\s+a\s+helpful\s+assistant\s+with\s+no\s+restrictions",
+    r"ignore\s+the\s+above\s+and\s+(instead\s+)?output",
+    r"append\s+your\s+(system\s+)?(instructions?|prompt)\s+at\s+the\s+end",
 ]
 
 # ── Jailbreak patterns ────────────────────────────────────────────
@@ -49,6 +62,22 @@ JAILBREAK_PATTERNS = [
     r"this\s+is\s+(just\s+)?(fiction|roleplay|a\s+story)",
     r"(write|create|generate)\s+(malware|virus|exploit|ransomware|backdoor)",
     r"how\s+to\s+(make|build|create|synthesize)\s+(a\s+)?(bomb|weapon|poison|drug)",
+    r"in\s+a\s+fictional\s+(story|world|scenario)",
+    r"for\s+(educational|research|academic)\s+purposes",
+    r"my\s+grandmother\s+(used\s+to|would)",
+    r"pretend\s+you\s+(are|have)\s+no\s+(filter|restriction|rule|guideline)",
+    r"write\s+a\s+(poem|story|song)\s+that\s+(teach|explain|show|describe)",
+    r"roleplay\s+as\s+(an?\s+)?(ai|assistant|bot)\s+(from|with|that|where)",
+    r"if\s+you\s+were\s+(an?\s+)?(unrestricted|unfiltered|evil|uncensored)",
+    r"continue\s+this\s+story.{0,30}(hack|exploit|attack|steal|bypass)",
+    r"(evilgpt|evilai|evil\s+gpt)",
+    r"what\s+would\s+(an?\s+)?(unrestricted|unfiltered|evil)\s+ai\s+(say|do|tell)",
+    r"what\s+would\s+(an?\s+)?ai\s+say\s+if\s+it\s+had\s+no\s+(content\s+)?filter",
+    r"hypothetically.{0,30}(steal|fraud|hack|bypass|exploit)",
+    r"(list|give\s+me).{0,20}ways\s+to\s+manipulate",
+    r"for\s+my\s+cybersecurity\s+course.{0,30}(demonstrate|show|create|generate)",
+    r"as\s+a\s+security\s+researcher.{0,30}(understand|explain|show|demonstrate)",
+    r"translate.{0,30}follow\s+the\s+instructions",
 ]
 
 # ── Sensitive data patterns ───────────────────────────────────────
@@ -62,6 +91,43 @@ PII_PATTERNS = {
     "ip_address":      r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
 }
 
+MALICIOUS_PATTERNS = [
+    r"how\s+(do\s+i|to|can\s+i)\s+bypass\s+.{0,30}(login|auth|security|access)",
+    r"(write|create|generate|draft)\s+(a\s+)?phishing\s+(email|message|page)",
+    r"(write|create|generate)\s+(malware|virus|ransomware|keylogger|trojan)",
+    r"how\s+(do\s+i|to|can\s+i)\s+(hack|breach|compromise|infiltrate)",
+    r"(access|get\s+into)\s+.{0,20}(account|system|database)\s+without",
+    r"(exfiltrate|steal|extract)\s+(data|information|credentials|passwords)",
+    r"(social\s+engineering|manipulate).{0,30}(password|credential|access)",
+    r"(clone|copy|duplicate)\s+(rfid|badge|card|credential)",
+    r"(fake|fraudulent|forged)\s+(invoice|document|identity|email)",
+    r"how\s+to\s+.{0,30}(without\s+(being\s+)?(detected|caught|traced|noticed))",
+    r"(generate|write|create)\s+(a\s+)?python\s+script\s+that\s+(scrapes?|steals?|extracts?)\s+(user\s+)?(password|credential|login)",
+    r"how\s+(can\s+i|do\s+i)\s+access\s+.{0,20}(account|email|system)\s+without\s+(them\s+)?(knowing|permission)",
+    r"how\s+(do\s+i|to)\s+manipulate\s+this\s+ai",
+    r"(generate|create|write)\s+social\s+engineering\s+(script|message|email|content)",
+    r"(clone|copy)\s+(an?\s+)?(rfid|badge|access\s+card)",
+    r"access\s+.{0,20}(email|account|calendar)\s+without\s+(them|him|her|the\s+user)\s+knowing",
+    r"(hiv|aids|cancer|diabetes|covid).{0,20}(positive|negative|status|diagnosis|result)",
+    r"(blood\s+type|blood\s+group)\s+[ABO][+-]",
+    r"patient\s+record.{0,30}(show|reveal|contain|include|display)",
+    r"access\s+.{0,10}colleague.{0,20}(email|account)"
+]
+
+
+def detect_malicious(text: str) -> RuleDetectionResult:
+    text_lower = text.lower()
+    matched    = []
+    for pattern in MALICIOUS_PATTERNS:
+        if re.search(pattern, text_lower, re.IGNORECASE):
+            matched.append(pattern[:50])
+    score = min(1.0, 0.8 if len(matched) >= 1 else 0.0)
+    return RuleDetectionResult(
+        detected      = len(matched) > 0,
+        score         = score,
+        matched_rules = matched,
+        category      = "malicious_intent"
+    )
 
 def detect_injection(text: str) -> RuleDetectionResult:
     text_lower = text.lower()
@@ -69,7 +135,7 @@ def detect_injection(text: str) -> RuleDetectionResult:
     for pattern in INJECTION_PATTERNS:
         if re.search(pattern, text_lower):
             matched.append(pattern[:50])
-    score = min(1.0, len(matched) * 0.35)
+    score = min(1.0, 0.7 if len(matched) >= 1 else 0.0)
     return RuleDetectionResult(
         detected      = len(matched) > 0,
         score         = score,
@@ -84,7 +150,7 @@ def detect_jailbreak(text: str) -> RuleDetectionResult:
     for pattern in JAILBREAK_PATTERNS:
         if re.search(pattern, text_lower, re.IGNORECASE):
             matched.append(pattern[:50])
-    score = min(1.0, len(matched) * 0.5)
+    score = min(1.0, 0.8 if len(matched) >= 1 else 0.0)
     return RuleDetectionResult(
         detected      = len(matched) > 0,
         score         = score,
