@@ -99,6 +99,26 @@ See `tests/eval/` for the full test set (90 labelled prompts) and evaluation scr
 
 ---
 
+## ⚡ Performance
+
+Measured on a local development environment (CPU-based inference, Windows, no GPU).
+Benchmark: 20 warm requests per endpoint via `tests/eval/run_benchmark.py`.
+
+| Layer | Mean | Median | P95 |
+|---|---|---|---|
+| Rule + ML (no LLM) | **19ms** | 15ms | 36ms |
+| Output guardrail | **22ms** | 17ms | 33ms |
+| Full pipeline (Rule + ML + LLM) | ~8,800ms | ~8,300ms | ~12,300ms |
+
+**Notes:**
+- `/gateway/scan` (Rule + ML only) is the recommended endpoint for real-time applications — **~15ms median latency**
+- LLM layer (llama3.2 via Ollama on CPU) adds ~8.8s — GPU or cloud LLM reduces this to 100–500ms
+- Pure detection pipeline: **~5ms** (measured via direct Python call)
+- Cold-start: ~2s on first request (spaCy model initialisation)
+- In production, use `/gateway/scan` for real-time traffic and `/gateway/check` for high-risk cases requiring LLM confirmation
+
+---
+
 ## 🚀 Key Features
 
 - 🔍 3-layer hybrid detection — rule-based patterns + ML classifier + LLM semantic reasoning
@@ -110,7 +130,7 @@ See `tests/eval/` for the full test set (90 labelled prompts) and evaluation scr
 - 📋 GDPR-aligned audit trail — inputs hashed with SHA-256, PII redacted before storage
 - ⚖️ Weighted risk scorer — configurable Allow / Sanitize / Block thresholds
 - 📊 Streamlit SOC dashboard — blocked requests, risk scores, and audit log viewer
-- ⚡ FastAPI gateway endpoints
+- ⚡ Async FastAPI endpoints — non-blocking with threadpool offloading
 - 🐳 Docker Compose deployment
 - 🔄 GitHub Actions CI/CD — 24 tests passing
 
@@ -184,6 +204,18 @@ if risk_score <  0.4:  →  ALLOW
 
 ---
 
+## 🔧 Implementation Notes
+
+**Async endpoints** — all FastAPI endpoints are fully async using `run_in_threadpool` to offload CPU-bound detection work. This keeps the event loop free and allows concurrent request handling without blocking.
+
+**Non-blocking MLflow logging** — experiment tracking runs in a background daemon thread so it never adds latency to the request/response cycle.
+
+**Persistent SQLite connection** — the audit logger maintains a single persistent connection with WAL mode enabled, eliminating per-request connection overhead.
+
+**Model pre-loading** — spaCy (`en_core_web_sm`) and the ML classifier are loaded at startup via the lifespan handler, eliminating cold-start latency on the first real request.
+
+---
+
 ## 📊 Dashboard Overview
 
 The Streamlit SOC dashboard provides:
@@ -206,7 +238,7 @@ The Streamlit SOC dashboard provides:
 | LLM detection | LangChain + Ollama (llama3.2, local, no API key) |
 | Risk scoring | Custom weighted scorer |
 | Audit | SQLite, GDPR-aligned |
-| Backend | FastAPI, Uvicorn |
+| Backend | FastAPI (async endpoints), Uvicorn |
 | Dashboard | Streamlit, Plotly |
 | Experiment tracking | MLflow |
 | Containerisation | Docker Compose |
