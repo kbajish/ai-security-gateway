@@ -24,7 +24,7 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 
-API_URL  = "http://localhost:8000"
+API_URL = "http://127.0.0.1:8000"
 EVAL_DIR = Path("tests/eval")
 PROMPTS  = EVAL_DIR / "test_prompts.json"
 RESULTS  = EVAL_DIR / "results"
