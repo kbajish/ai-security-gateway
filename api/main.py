@@ -1,8 +1,11 @@
 import os
 import uuid
+import threading
 import mlflow
 import spacy
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -15,19 +18,24 @@ load_dotenv()
 
 mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlruns.db"))
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Pre-load heavy models on startup to avoid per-request cold start."""
+    await run_in_threadpool(get_ml_pipeline)
+    await run_in_threadpool(spacy.load, "en_core_web_sm")
+    yield
+
+
 app = FastAPI(
     title       = "AI Security Gateway",
     description = "3-layer hybrid security gateway for LLM applications",
-    version     = "1.0.0"
+    version     = "1.0.0",
+    lifespan    = lifespan,
 )
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Pre-load heavy models on startup to avoid per-request loading."""
-    get_ml_pipeline()
-    spacy.load("en_core_web_sm")
-
+# ── Request / Response Models ─────────────────────────────────────
 
 class CheckRequest(BaseModel):
     text:    str
@@ -44,39 +52,29 @@ class OutputCheckRequest(BaseModel):
 
 
 class GatewayResponse(BaseModel):
-    request_id:     str
-    action:         str
-    risk_score:     float
-    reason:         str
-    safe_text:      str
+    request_id:      str
+    action:          str
+    risk_score:      float
+    reason:          str
+    safe_text:       str
     injection_score: float
     jailbreak_score: float
-    pii_score:      float
-    llm_score:      float
-    pii_entities:   list
+    pii_score:       float
+    llm_score:       float
+    pii_entities:    list
 
 
-@app.get("/health")
-def health():
-    return {"status": "ok", "version": "1.0.0", "gateway": "active"}
+# ── Helpers ───────────────────────────────────────────────────────
 
-
-@app.post("/gateway/check", response_model=GatewayResponse)
-def gateway_check(req: CheckRequest):
-    if not req.text.strip():
-        raise HTTPException(status_code=400, detail="Text cannot be empty")
-    try:
-        request_id = str(uuid.uuid4())[:8]
-
-        assessment = assess_risk(req.text, use_llm=req.use_llm)
-        decision   = make_decision(assessment)
-
-        # MLflow logging — non-blocking
+def _log_mlflow_async(request_id: str, use_llm: bool,
+                       assessment, decision) -> None:
+    """Log to MLflow in a background thread — non-blocking."""
+    def _log():
         try:
             mlflow.set_experiment("security-gateway")
             with mlflow.start_run(run_name="gateway_check"):
                 mlflow.log_param("request_id", request_id)
-                mlflow.log_param("use_llm",    req.use_llm)
+                mlflow.log_param("use_llm",    use_llm)
                 mlflow.log_metrics({
                     "risk_score":      assessment.risk_score,
                     "injection_score": assessment.injection_score,
@@ -84,20 +82,48 @@ def gateway_check(req: CheckRequest):
                     "pii_score":       assessment.pii_score,
                 })
                 mlflow.log_param("action", decision.action)
-        except Exception as mlflow_err:
-            pass  # MLflow unavailable — continue without logging
+        except Exception:
+            pass
+    threading.Thread(target=_log, daemon=True).start()
 
-        log_request(
-            input_text      = req.text,
-            risk_score      = assessment.risk_score,
-            injection_score = assessment.injection_score,
-            jailbreak_score = assessment.jailbreak_score,
-            pii_score       = assessment.pii_score,
-            llm_score       = assessment.llm_score,
-            action          = decision.action,
-            reason          = decision.reason,
-            pii_types       = [e["label"] for e in assessment.pii_entities],
-            request_id      = request_id
+
+# ── Endpoints ─────────────────────────────────────────────────────
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "version": "1.0.0", "gateway": "active"}
+
+
+@app.post("/gateway/check", response_model=GatewayResponse)
+async def gateway_check(req: CheckRequest):
+    """Full 3-layer security check — rule + ML + LLM."""
+    if not req.text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+    try:
+        request_id = str(uuid.uuid4())[:8]
+
+        # Run blocking detection in threadpool — keeps event loop free
+        assessment = await run_in_threadpool(
+            assess_risk, req.text, req.use_llm
+        )
+        decision   = await run_in_threadpool(make_decision, assessment)
+
+        # Non-blocking MLflow logging
+        _log_mlflow_async(request_id, req.use_llm, assessment, decision)
+
+        # Non-blocking audit log
+        await run_in_threadpool(
+            log_request,
+            req.text,
+            assessment.risk_score,
+            assessment.injection_score,
+            assessment.jailbreak_score,
+            assessment.pii_score,
+            assessment.llm_score,
+            decision.action,
+            decision.reason,
+            [e["label"] for e in assessment.pii_entities],
+            request_id,
         )
 
         return GatewayResponse(
@@ -110,7 +136,7 @@ def gateway_check(req: CheckRequest):
             jailbreak_score = assessment.jailbreak_score,
             pii_score       = assessment.pii_score,
             llm_score       = assessment.llm_score,
-            pii_entities    = assessment.pii_entities
+            pii_entities    = assessment.pii_entities,
         )
 
     except Exception as e:
@@ -118,45 +144,49 @@ def gateway_check(req: CheckRequest):
 
 
 @app.post("/gateway/scan")
-def gateway_scan(req: ScanRequest):
-    """Quick scan without LLM — low latency."""
+async def gateway_scan(req: ScanRequest):
+    """Fast scan — rule + ML only, no LLM, no MLflow logging."""
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
     try:
-        assessment = assess_risk(req.text, use_llm=False)
-        decision   = make_decision(assessment)
+        assessment = await run_in_threadpool(assess_risk, req.text, False)
+        decision   = await run_in_threadpool(make_decision, assessment)
         return {
             "action":     decision.action,
             "risk_score": assessment.risk_score,
-            "reason":     decision.reason
+            "reason":     decision.reason,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/gateway/output")
-def check_output(req: OutputCheckRequest):
+async def check_output(req: OutputCheckRequest):
     """Check LLM output before returning to user."""
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
     try:
-        result = guard_output(req.text)
+        result = await run_in_threadpool(guard_output, req.text)
         return {
             "safe":          result.safe,
             "action":        result.action,
             "reason":        result.reason,
             "filtered_text": result.filtered_text,
-            "pii_found":     result.pii_found
+            "pii_found":     result.pii_found,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/audit")
-def audit(limit: int = 100):
-    return get_recent_logs(limit)
+async def audit(limit: int = 100):
+    return await run_in_threadpool(get_recent_logs, limit)
 
 
 @app.get("/audit/stats")
-def audit_stats():
-    return get_stats()
+async def audit_stats():
+    return await run_in_threadpool(get_stats)
+
+@app.get("/ping")
+async def ping():
+    return {"pong": True}
